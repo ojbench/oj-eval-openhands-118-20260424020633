@@ -147,18 +147,15 @@ public:
         return numerator != _Tp(0);
     }
     
-    template <typename T>
-    friend bool operator == (const fraction<T> &a, const fraction<T> &b) {
+    friend bool operator == (const fraction &a, const fraction &b) {
         return a.numerator == b.numerator && a.denominator == b.denominator;
     }
     
-    template <typename T>
-    friend bool operator < (const fraction<T> &a, const fraction<T> &b) {
+    friend bool operator < (const fraction &a, const fraction &b) {
         return a.numerator * b.denominator < b.numerator * a.denominator;
     }
     
-    template <typename T>
-    friend std::ostream & operator << (std::ostream &os, const fraction<T> &f) {
+    friend std::ostream & operator << (std::ostream &os, const fraction &f) {
         os << f.numerator << "/" << f.denominator;
         return os;
     }

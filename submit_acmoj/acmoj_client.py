@@ -47,11 +47,15 @@ class ACMOJClient:
             if method.upper() == "GET":
                 response = requests.get(url, headers=self.headers, params=params, timeout=10, proxies={"https": None, "http": None})
             elif method.upper() == "POST":
+                print(f"DEBUG: Sending POST to {url} with data: {data}")
                 response = requests.post(url, headers=self.headers, data=data, timeout=10, proxies={"https": None, "http": None})
             else:
                 print(f"Unsupported HTTP method: {method}")
                 return None
 
+            print(f"DEBUG: Response status: {response.status_code}")
+            print(f"DEBUG: Response text: {response.text}")
+            
             if response.status_code == 204:
                 return {"status": "success", "message": "Operation successful"}
 
@@ -65,6 +69,7 @@ class ACMOJClient:
         except requests.exceptions.RequestException as e:
             print(f"API Request failed: {e}")
             if 'response' in locals() and response:
+                print(f"Response status code: {response.status_code}")
                 print(f"Response text: {response.text}")
             return None
 
@@ -91,6 +96,14 @@ class ACMOJClient:
 
         return result
 
+    def submit_code(self, problem_id: int, language: str, code: str) -> Optional[Dict]:
+        data = {"language": language, "code": code}
+        result = self._make_request("POST", f"/problem/{problem_id}/submit", data=data)
+        if result and 'id' in result:
+            self._save_submission_id(result['id'])
+
+        return result
+
     def get_submission_detail(self, submission_id: int) -> Optional[Dict]:
         return self._make_request("GET", f"/submission/{submission_id}")
 
@@ -108,10 +121,12 @@ def main():
     # Submit C++ source file
     submit_parser = subparsers.add_parser("submit", help="Submit a C++ source file")
     submit_parser.add_argument("--problem-id", type=int, required=True, help="Problem ID")
-    submit_parser.add_argument("--language", type=str, required=True,
-                               help="Programming language (e.g., cpp, c, python)")
-    submit_parser.add_argument("--code-file", type=str, required=True,
+    submit_parser.add_argument("--language", type=str, required=False, default="git",
+                               help="Programming language (e.g., cpp, c, python, git)")
+    submit_parser.add_argument("--code-file", type=str, required=False,
                                help="Path to the source code file")
+    submit_parser.add_argument("--git-url", type=str, required=False,
+                               help="Git repository URL")
 
     # Sub-command for checking submission status
     status_parser = subparsers.add_parser("status", help="Check submission status")
@@ -130,17 +145,45 @@ def main():
     client = ACMOJClient(args.token)
 
     if args.command == "submit":
-        try:
-            with open(args.code_file, 'r', encoding='utf-8') as f:
-                code_text = f.read()
-        except FileNotFoundError:
-            print(f"Error: Code file not found at {args.code_file}")
-            exit(1)
-        except Exception as e:
-            print(f"Error: Failed to read code file: {e}")
-            exit(1)
+        if args.language == "git":
+            # Git submission
+            if args.git_url:
+                git_url = args.git_url
+            else:
+                # Try to get git URL from current repository
+                try:
+                    import subprocess
+                    git_url_output = subprocess.check_output(
+                        ["git", "config", "--get", "remote.origin.url"],
+                        cwd=os.path.dirname(os.path.abspath(__file__)) + "/..",
+                        stderr=subprocess.STDOUT
+                    ).decode('utf-8').strip()
+                    # Remove credentials from URL if present
+                    if "@" in git_url_output:
+                        git_url = "https://" + git_url_output.split("@")[1]
+                    else:
+                        git_url = git_url_output
+                    print(f"Using git URL: {git_url}")
+                except Exception as e:
+                    print(f"Error: Failed to get git URL: {e}")
+                    exit(1)
+            result = client.submit_git(args.problem_id, git_url)
+        else:
+            # Code file submission
+            if not args.code_file:
+                print("Error: --code-file is required for non-git submissions")
+                exit(1)
+            try:
+                with open(args.code_file, 'r', encoding='utf-8') as f:
+                    code_text = f.read()
+            except FileNotFoundError:
+                print(f"Error: Code file not found at {args.code_file}")
+                exit(1)
+            except Exception as e:
+                print(f"Error: Failed to read code file: {e}")
+                exit(1)
 
-        result = client.submit_code(args.problem_id, args.language, code_text)
+            result = client.submit_code(args.problem_id, args.language, code_text)
 
     elif args.command == "status":
         result = client.get_submission_detail(args.submission_id)
