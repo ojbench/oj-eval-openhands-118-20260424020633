@@ -47,14 +47,10 @@ class ACMOJClient:
             if method.upper() == "GET":
                 response = requests.get(url, headers=self.headers, params=params, timeout=10, proxies={"https": None, "http": None})
             elif method.upper() == "POST":
-                print(f"DEBUG: Sending POST to {url} with data: {data}")
                 response = requests.post(url, headers=self.headers, data=data, timeout=10, proxies={"https": None, "http": None})
             else:
                 print(f"Unsupported HTTP method: {method}")
                 return None
-
-            print(f"DEBUG: Response status: {response.status_code}")
-            print(f"DEBUG: Response text: {response.text}")
             
             if response.status_code == 204:
                 return {"status": "success", "message": "Operation successful"}
